@@ -1,0 +1,11 @@
+central_base_url: https://central.example
+
+# Reconcile loop interval for run mode (seconds).
+poll_interval_seconds: 30
+
+# Appliance defaults; override with RELEASEPANEL_STATE_DIR / RELEASEPANEL_LOG_DIR.
+state_dir: /var/lib/releasepanel-agent
+log_dir: /var/log/releasepanel-agent
+
+# Development only — keeps TLS but skips certificate verification.
+skip_tls_verify: false
