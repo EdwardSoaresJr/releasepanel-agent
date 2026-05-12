@@ -52,6 +52,7 @@ flowchart LR
 
 ## Related documents
 
+- [Central HTTP API (paths & rollout)](CENTRAL_API.md)
 - [Enrollment](ENROLLMENT.md)
 - [Deploy pipeline](DEPLOY_PIPELINE.md)
 - [Convergence & inventory](CONVERGENCE.md)

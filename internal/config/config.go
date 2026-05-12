@@ -5,6 +5,8 @@ import (
 	"os"
 	"time"
 
+	"releasepanel/agent/internal/urlorigin"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -25,6 +27,10 @@ type Config struct {
 	LogDir   string `yaml:"log_dir"`
 
 	SkipTLSVerify bool `yaml:"skip_tls_verify"`
+
+	// ManifestReconcileEnabled runs GET desired + deploy pipeline each cycle when true.
+	// Default false: heartbeat/inventory/health only until Central is ready — see docs/CENTRAL_API.md.
+	ManifestReconcileEnabled bool `yaml:"manifest_reconcile_enabled"`
 }
 
 // PollInterval returns the configured reconcile interval or the default.
@@ -55,6 +61,9 @@ func Load(path string) (*Config, error) {
 
 	if cfg.CentralBaseURL == "" {
 		return nil, fmt.Errorf("central_base_url is required")
+	}
+	if err := urlorigin.ValidateHTTPOrigin(cfg.CentralBaseURL); err != nil {
+		return nil, fmt.Errorf("central_base_url: %w", err)
 	}
 
 	if cfg.StateDir == "" {

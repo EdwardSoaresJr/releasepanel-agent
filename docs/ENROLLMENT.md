@@ -6,7 +6,7 @@ Establish a **cryptographically bounded** trust relationship between one VPS nod
 
 ## Preconditions
 
-- Agent binary installed and config pointing at `central_base_url` (HTTPS).
+- Agent binary installed and config pointing at `central_base_url` (HTTPS origin only — see [CENTRAL_API.md](CENTRAL_API.md)).
 - Operator has an enrollment token from central (opaque string; format is central’s concern).
 
 ## Flow
@@ -19,7 +19,7 @@ Establish a **cryptographically bounded** trust relationship between one VPS nod
      --token-file /run/releasepanel/enrollment.token
    ```
 
-2. **Agent** reads token, collects **stable node facts** (hostname, OS, architecture, `/etc/machine-id` when present), builds `POST /v1/nodes/enroll` body (see `pkg/api`).
+2. **Agent** reads token, collects **stable node facts** (hostname, OS, architecture, `/etc/machine-id` when present), builds `POST /api/v1/nodes/enroll` body (see `pkg/api`).
 
 3. **Central** validates token, allocates `node_id`, returns:
 

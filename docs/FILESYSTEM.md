@@ -26,7 +26,7 @@ State root subdirectories:
 
 | Variable | Effect |
 |----------|--------|
-| `RELEASEPANEL_CONFIG` | Path to config file (default `/etc/releasepanel-agent/config.yaml`). |
+If `RELEASEPANEL_CONFIG` points at a YAML file, **`central_base_url` must be origin-only** (`https://host`, no `/api` path). The agent calls **`/api/v1/...`** on Central; see [CENTRAL_API.md](CENTRAL_API.md).
 | `RELEASEPANEL_STATE_DIR` | Replaces `/var/lib/releasepanel-agent`. |
 | `RELEASEPANEL_LOG_DIR` | Replaces `/var/log/releasepanel-agent`. |
 

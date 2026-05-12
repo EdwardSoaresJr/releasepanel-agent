@@ -12,15 +12,19 @@ import (
 	"strings"
 	"time"
 
+	"releasepanel/agent/internal/urlorigin"
 	"releasepanel/agent/pkg/api"
 )
 
+// HTTP paths are rooted under /api/v1 on Central. central_base_url must be
+// scheme://host[:port] only — see docs/CENTRAL_API.md.
 const (
-	pathEnrollFmt          = "/v1/nodes/enroll"
-	pathDesiredFmt         = "/v1/nodes/%s/desired"
-	pathReportInventoryFmt = "/v1/nodes/%s/reports/inventory"
-	pathReportHealthFmt    = "/v1/nodes/%s/reports/health"
-	pathReportConvFmt      = "/v1/nodes/%s/reports/convergence"
+	pathEnrollFmt          = "/api/v1/nodes/enroll"
+	pathHeartbeatFmt       = "/api/v1/nodes/%s/heartbeat"
+	pathDesiredFmt         = "/api/v1/nodes/%s/desired"
+	pathReportInventoryFmt = "/api/v1/nodes/%s/reports/inventory"
+	pathReportHealthFmt    = "/api/v1/nodes/%s/reports/health"
+	pathReportConvFmt      = "/api/v1/nodes/%s/reports/convergence"
 )
 
 type Client struct {
@@ -31,12 +35,13 @@ type Client struct {
 }
 
 func New(base string, skipTLSVerify bool) (*Client, error) {
+	base = strings.TrimSpace(base)
+	if err := urlorigin.ValidateHTTPOrigin(base); err != nil {
+		return nil, err
+	}
 	u, err := url.Parse(strings.TrimRight(base, "/"))
 	if err != nil {
 		return nil, err
-	}
-	if u.Scheme == "" || u.Host == "" {
-		return nil, fmt.Errorf("invalid central base URL %q", base)
 	}
 	tr := &http.Transport{
 		MaxIdleConns:        64,
@@ -98,6 +103,11 @@ func (c *Client) PostInventory(ctx context.Context, report api.InventoryReport) 
 
 func (c *Client) PostHealth(ctx context.Context, report api.HealthReport) error {
 	path := fmt.Sprintf(pathReportHealthFmt, url.PathEscape(c.nodeID))
+	return c.postJSON(ctx, path, report, nil, true)
+}
+
+func (c *Client) PostHeartbeat(ctx context.Context, report api.HeartbeatReport) error {
+	path := fmt.Sprintf(pathHeartbeatFmt, url.PathEscape(c.nodeID))
 	return c.postJSON(ctx, path, report, nil, true)
 }
 

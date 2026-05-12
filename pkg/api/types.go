@@ -77,6 +77,14 @@ type HealthCheck struct {
 	DurationMs int64  `json:"duration_ms"`
 }
 
+// HeartbeatReport lets Central record agent presence (e.g. last_seen_at).
+type HeartbeatReport struct {
+	SchemaVersion int    `json:"schema_version"`
+	NodeID        string `json:"node_id"`
+	CollectedAt   string `json:"collected_at"`
+	AgentVersion  string `json:"agent_version"`
+}
+
 // ConvergenceReport ties desired/applied fingerprints to deploy outcomes.
 type ConvergenceReport struct {
 	SchemaVersion           int    `json:"schema_version"`

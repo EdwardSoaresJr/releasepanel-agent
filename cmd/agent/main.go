@@ -54,7 +54,7 @@ func usage() {
 
 Commands:
   enroll      Exchange enrollment token for persisted node credentials
-  run         Long-running reconcile loop (inventory, health, convergence)
+  run         Long-running loop (heartbeat, inventory, health; optional manifest reconcile)
   inventory   Print one JSON inventory snapshot to stdout
   health      Print one JSON health snapshot to stdout
 
@@ -164,7 +164,7 @@ func cmdRun(args []string) {
 	ticker := time.NewTicker(cfg.PollInterval())
 	defer ticker.Stop()
 
-	sink.Printf("agent %s starting loop interval=%s node=%s", version.Version, cfg.PollInterval(), rec.NodeID)
+	sink.Printf("agent %s starting loop interval=%s node=%s manifest_reconcile=%v", version.Version, cfg.PollInterval(), rec.NodeID, cfg.ManifestReconcileEnabled)
 
 	for {
 		rt.LoopCount++
@@ -173,6 +173,17 @@ func cmdRun(args []string) {
 
 		if err := persistRuntime(rtPath, rt); err != nil {
 			sink.Printf("persist runtime: %v", err)
+		}
+
+		hb := api.HeartbeatReport{
+			SchemaVersion: api.SchemaV1,
+			NodeID:        rec.NodeID,
+			CollectedAt:   time.Now().UTC().Format(time.RFC3339),
+			AgentVersion:  version.Version,
+		}
+		if err := cl.PostHeartbeat(ctx, hb); err != nil {
+			rt.LastError = err.Error()
+			sink.Printf("post heartbeat: %v", err)
 		}
 
 		inv, err := inventory.Collect("", version.Version)
@@ -208,12 +219,14 @@ func cmdRun(args []string) {
 			rt.LastHealthPostAt = time.Now().UTC()
 		}
 
-		next, err := runner.Reconcile(ctx, cl, conv, rec.NodeID)
-		if err != nil {
-			rt.LastError = err.Error()
-			sink.Printf("reconcile: %v", err)
+		if cfg.ManifestReconcileEnabled {
+			next, err := runner.Reconcile(ctx, cl, conv, rec.NodeID)
+			if err != nil {
+				rt.LastError = err.Error()
+				sink.Printf("reconcile: %v", err)
+			}
+			conv = next
 		}
-		conv = next
 
 		if err := persistRuntime(rtPath, rt); err != nil {
 			sink.Printf("persist runtime: %v", err)

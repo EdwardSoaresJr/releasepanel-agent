@@ -3,6 +3,10 @@ central_base_url: https://central.example
 # Reconcile loop interval for run mode (seconds).
 poll_interval_seconds: 30
 
+# When true, agent fetches GET /api/v1/nodes/{id}/desired and runs deploy/convergence.
+# Keep false until Central implements heartbeat + reporting and you are ready for manifests.
+manifest_reconcile_enabled: false
+
 # Appliance defaults; override with RELEASEPANEL_STATE_DIR / RELEASEPANEL_LOG_DIR.
 state_dir: /var/lib/releasepanel-agent
 log_dir: /var/log/releasepanel-agent

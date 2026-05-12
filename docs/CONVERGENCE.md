@@ -44,7 +44,8 @@ All bodies are **JSON** with a top-level `schema_version` field.
 
 - Inventory: default **hourly** (configurable).
 - Health: default **minutes** (configurable).
-- Convergence/deploy: **immediate** on manifest change detection + periodic reconcile.
+- **Heartbeat**: each agent loop (lightweight `POST .../heartbeat` for Central `last_seen_at`).
+- Convergence/deploy manifest fetch: **only when** `manifest_reconcile_enabled: true` in agent config (see [CENTRAL_API.md](CENTRAL_API.md)); otherwise **inventory + health + heartbeat** form the integration spine first.
 
 ## Local-first
 
