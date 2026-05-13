@@ -20,6 +20,7 @@ Design principles:
 | **Inventory** | Periodic snapshot of hardware/OS/runtime facts (versions, paths, listeners). |
 | **Health** | Lightweight probes for nginx, php-fpm, disk; structured pass/fail + detail. |
 | **Deploy runner** | Executes a **declared pipeline** (fetch → validate → apply → verify → report); advanced strategies come later. |
+| **Operator console** | **`releasepanel`** — SSH-first menus and subcommands; local commands only; see [OPERATOR_CONSOLE.md](OPERATOR_CONSOLE.md). |
 | **Convergence** | Compare last **applied** manifest fingerprint vs **desired** from central; re-run pipeline until match or terminal error. |
 | **Runtime adapters** | Thin wrappers: `nginx -t`, reload signals, `php-fpm` pool checks — no plugin architecture. |
 
@@ -52,6 +53,7 @@ flowchart LR
 
 ## Related documents
 
+- [Operational doctrine — pull-only runtime](OPERATIONS.md)
 - [Central HTTP API (paths & rollout)](CENTRAL_API.md)
 - [Enrollment](ENROLLMENT.md)
 - [Deploy pipeline](DEPLOY_PIPELINE.md)

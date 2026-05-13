@@ -55,5 +55,6 @@ Older installs may have persisted **`https://host/api`** inside `enrollment.json
 
 ## Related docs
 
+- [Operational doctrine](OPERATIONS.md)
 - [Enrollment flow](ENROLLMENT.md)
 - [Architecture overview](ARCHITECTURE.md)
