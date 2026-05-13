@@ -13,3 +13,38 @@ log_dir: /var/log/releasepanel-agent
 
 # Development only — keeps TLS but skips certificate verification.
 skip_tls_verify: false
+
+# --- Ping convergence (Sanctum agent token from POST /api/v1/agent/bootstrap) ---
+# agent_ping_token_file: /etc/releasepanel-agent/agent.token
+# runtime_deploy_path_roots:
+#   - /srv/releasepanel
+#   - /var/www
+
+# --- Bounded nginx runtime materialization (optional; both roots required together) ---
+# nginx_sites_available_root: /etc/nginx/sites-available/releasepanel
+# nginx_sites_enabled_root: /etc/nginx/sites-enabled/releasepanel
+# nginx_test_argv:
+#   - /usr/sbin/nginx
+#   - -t
+# nginx_reload_argv:
+#   - /usr/sbin/nginx
+#   - -s
+#   - reload
+# nginx_php_fastcgi_pass: unix:/run/php/php8.3-fpm.sock
+
+# PEM paths on disk must stay under these prefixes when tls_enabled on ping intents:
+# tls_certificate_path_roots:
+#   - /etc/letsencrypt
+#   - /etc/ssl/releasepanel
+
+# --- Bounded runtime dependency probes (optional; explicit targets only) ---
+# See docs/RUNTIME_DEPENDENCY_OBSERVATION.md
+# runtime_dependency_probes:
+#   - type: php_fpm
+#     socket: /run/php/php8.3-fpm.sock
+#   - type: redis
+#     tcp: 127.0.0.1:6379
+#   - type: mysql
+#     tcp: 127.0.0.1:3306
+#   - type: postgres
+#     tcp: 127.0.0.1:5432

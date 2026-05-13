@@ -20,6 +20,8 @@ State root subdirectories:
     runs/                  # JSONL run records
   locks/                   # coarse flock files (single-node)
   outbox/                  # optional queued reports for retry
+  repository-deploy-keys/  # 0600 private keys as <site_ulid>.key (read-only Git SSH)
+  site_tls_echo.json       # last tls_state echoed per site_ulid for ping receipts (0600)
 ```
 
 ## Environment overrides

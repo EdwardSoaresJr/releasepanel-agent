@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"syscall"
@@ -16,10 +17,13 @@ import (
 	"releasepanel/agent/internal/config"
 	"releasepanel/agent/internal/deploy"
 	"releasepanel/agent/internal/enroll"
+	"releasepanel/agent/internal/gitdeploy"
 	"releasepanel/agent/internal/health"
 	"releasepanel/agent/internal/inventory"
 	"releasepanel/agent/internal/logs"
+	"releasepanel/agent/internal/nginxruntime"
 	"releasepanel/agent/internal/paths"
+	"releasepanel/agent/internal/runtimeprobe"
 	"releasepanel/agent/internal/state"
 	"releasepanel/agent/internal/version"
 	"releasepanel/agent/pkg/api"
@@ -135,7 +139,7 @@ func cmdRun(args []string) {
 		os.Exit(1)
 	}
 
-	if err := state.EnsureTree(0o755, cfg.StateDir, paths.LocksDir(cfg.StateDir), paths.DeployStaging(cfg.StateDir), paths.DeployRuns(cfg.StateDir), paths.OutboxDir(cfg.StateDir), cfg.LogDir); err != nil {
+	if err := state.EnsureTree(0o755, cfg.StateDir, paths.LocksDir(cfg.StateDir), paths.DeployStaging(cfg.StateDir), paths.DeployRuns(cfg.StateDir), paths.OutboxDir(cfg.StateDir), paths.RepositoryDeployKeysDir(cfg.StateDir), cfg.LogDir); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
@@ -217,6 +221,147 @@ func cmdRun(args []string) {
 			sink.Printf("post health: %v", err)
 		} else {
 			rt.LastHealthPostAt = time.Now().UTC()
+		}
+
+		hn, _ := os.Hostname()
+		if pingTokFile := strings.TrimSpace(cfg.AgentPingTokenFile); pingTokFile != "" {
+			rawPingTok, err := os.ReadFile(pingTokFile)
+			if err != nil {
+				rt.LastError = err.Error()
+				sink.Printf("read agent_ping_token_file: %v", err)
+			} else {
+				pingCl, err := central.NewPingClient(rec.CentralBaseURL, cfg.SkipTLSVerify, strings.TrimSpace(string(rawPingTok)))
+				if err != nil {
+					rt.LastError = err.Error()
+					sink.Printf("ping client: %v", err)
+				} else {
+					depSpecs := cfg.RuntimeProbeSpecs()
+					if len(depSpecs) > 0 {
+						reports := runtimeprobe.RunAll(ctx, depSpecs)
+						if _, err := pingCl.PostPing(ctx, &api.AgentPingPostBody{
+							SchemaVersion:            api.SchemaV1,
+							Hostname:                 hn,
+							AgentVersion:             version.Version,
+							RuntimeDependencyReports: reports,
+						}); err != nil {
+							rt.LastError = err.Error()
+							sink.Printf("post ping runtime_dependency_reports: %v", err)
+						} else {
+							for _, r := range reports {
+								if r.State != runtimeprobe.StateObserved {
+									sink.Printf("%s probe %s", r.Dependency, r.State)
+								}
+							}
+						}
+					}
+					pingResp, err := pingCl.GetPing(ctx)
+					if err != nil {
+						rt.LastError = err.Error()
+						sink.Printf("get ping: %v", err)
+					} else {
+						tlsEchoPath := paths.SiteTlsEcho(cfg.StateDir)
+						tlsEcho := loadTlsEchoMap(tlsEchoPath)
+						roots := normalizeDeployRoots(cfg.RuntimeDeployPathRoots)
+						for _, intent := range pingResp.SiteRepositoryDeployIntents {
+							tls := tlsEcho[intent.SiteULID]
+							if tls == "" {
+								tls = "none"
+							}
+							keyPath := filepath.Join(paths.RepositoryDeployKeysDir(cfg.StateDir), intent.SiteULID+".key")
+							reporter := func(row api.SiteRuntimeReportRow) error {
+								_, err := pingCl.PostPing(ctx, &api.AgentPingPostBody{
+									SchemaVersion:      api.SchemaV1,
+									Hostname:           hn,
+									AgentVersion:       version.Version,
+									SiteRuntimeReports: []api.SiteRuntimeReportRow{row},
+								})
+								if err != nil {
+									return err
+								}
+								tlsEcho[row.SiteULID] = row.TLSState
+								if err := saveTlsEchoMap(tlsEchoPath, tlsEcho); err != nil {
+									sink.Printf("persist site_tls_echo: %v", err)
+								}
+								if row.RepositoryDeployState == gitdeploy.StateApplied && strings.TrimSpace(row.ObservedCommitSHA) != "" {
+									sink.Printf("observed commit advanced site=%s sha=%s", row.SiteULID, row.ObservedCommitSHA)
+								}
+								if row.RepositoryDeployState == gitdeploy.StateFailed {
+									sink.Printf("repository deploy failed site=%s", row.SiteULID)
+								}
+								return nil
+							}
+							if err := gitdeploy.Run(ctx, reporter, gitdeploy.Options{
+								Intent:           intent,
+								AllowedPathRoots: roots,
+								PrivateKeyPath:   keyPath,
+								KnownHostsPath:   strings.TrimSpace(cfg.GitHubSSHKnownHostsFile),
+								TLSStateEcho:     tls,
+							}); err != nil {
+								rt.LastError = err.Error()
+								sink.Printf("repository converge site=%s: %v", intent.SiteULID, err)
+							}
+						}
+						if cfg.NginxRuntimeConfigured() {
+							tlsRoots := normalizeDeployRoots(cfg.TLSCertificatePathRoots)
+							for _, rtIntent := range pingResp.SiteRuntimeApplyIntents {
+								tls := tlsEcho[rtIntent.SiteULID]
+								if tls == "" {
+									tls = "none"
+								}
+								rtReporter := func(row api.SiteRuntimeReportRow) error {
+									_, err := pingCl.PostPing(ctx, &api.AgentPingPostBody{
+										SchemaVersion:      api.SchemaV1,
+										Hostname:           hn,
+										AgentVersion:       version.Version,
+										SiteRuntimeReports: []api.SiteRuntimeReportRow{row},
+									})
+									if err != nil {
+										return err
+									}
+									tlsEcho[row.SiteULID] = row.TLSState
+									if err := saveTlsEchoMap(tlsEchoPath, tlsEcho); err != nil {
+										sink.Printf("persist site_tls_echo: %v", err)
+									}
+									switch row.RuntimeApplyState {
+									case nginxruntime.StateApplied:
+										if rtIntent.TLSEnabled {
+											sink.Printf("tls config materialized site=%s", row.SiteULID)
+										} else {
+											sink.Printf("site config materialized site=%s", row.SiteULID)
+										}
+									case nginxruntime.StateReloadApplied:
+										sink.Printf("reload observed site=%s", row.SiteULID)
+									case nginxruntime.StateFailed:
+										fr := strings.ToLower(row.FailureReason)
+										if strings.Contains(fr, "certificate") {
+											sink.Printf("certificate path missing site=%s", row.SiteULID)
+										} else if strings.Contains(fr, "validation") {
+											sink.Printf("nginx validation failed site=%s", row.SiteULID)
+										} else {
+											sink.Printf("nginx runtime converge failed site=%s", row.SiteULID)
+										}
+									}
+									return nil
+								}
+								if err := nginxruntime.Run(ctx, rtReporter, nginxruntime.Options{
+									Intent:                  rtIntent,
+									DeployPathRoots:         roots,
+									NginxSitesAvailableRoot: strings.TrimSpace(cfg.NginxSitesAvailableRoot),
+									NginxSitesEnabledRoot:   strings.TrimSpace(cfg.NginxSitesEnabledRoot),
+									NginxTestArgv:           cfg.ResolvedNginxTestArgv(),
+									NginxReloadArgv:         cfg.ResolvedNginxReloadArgv(),
+									NginxPHPFastcgiPass:     cfg.ResolvedNginxPHPFastcgiPass(),
+									TLSStateEcho:            tls,
+									TLSCertificatePathRoots: tlsRoots,
+								}); err != nil {
+									rt.LastError = err.Error()
+									sink.Printf("nginx runtime converge site=%s: %v", rtIntent.SiteULID, err)
+								}
+							}
+						}
+					}
+				}
+			}
 		}
 
 		if cfg.ManifestReconcileEnabled {
@@ -323,4 +468,40 @@ func shouldInventory(rt state.RuntimeCounters, every time.Duration) bool {
 		return true
 	}
 	return time.Since(rt.LastInventoryPostAt) >= every
+}
+
+func loadTlsEchoMap(path string) map[string]string {
+	out := map[string]string{}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return out
+	}
+	var stub map[string]string
+	if err := json.Unmarshal(raw, &stub); err != nil {
+		return out
+	}
+	for k, v := range stub {
+		k = strings.TrimSpace(k)
+		v = strings.TrimSpace(v)
+		if k != "" && v != "" {
+			out[k] = v
+		}
+	}
+	return out
+}
+
+func saveTlsEchoMap(path string, m map[string]string) error {
+	return state.WriteJSONAtomic(path, m, 0o600)
+}
+
+func normalizeDeployRoots(in []string) []string {
+	var out []string
+	for _, r := range in {
+		r = strings.TrimSpace(r)
+		if r == "" {
+			continue
+		}
+		out = append(out, r)
+	}
+	return out
 }

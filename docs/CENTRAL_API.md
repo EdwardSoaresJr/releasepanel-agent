@@ -39,8 +39,14 @@ Enrollment uses **no** bearer token (only JSON body with enrollment token).
 | `POST` | `/api/v1/nodes/{id}/reports/health` | Yes | [`HealthReport`](../pkg/api/types.go) | Probe summary |
 | `GET` | `/api/v1/nodes/{id}/desired` | Yes | — (JSON manifest) | Desired manifest fetch (**only when** `manifest_reconcile_enabled: true`) |
 | `POST` | `/api/v1/nodes/{id}/reports/convergence` | Yes | [`ConvergenceReport`](../pkg/api/types.go) | Deploy/convergence status (**reconcile enabled**) |
+| `GET` | `/api/v1/agent/ping` | Bearer only (Sanctum **agent** token) | — | Observe **`site_repository_deploy_intents`** + **`site_runtime_apply_intents`** (**when** `agent_ping_token_file` configured) |
+| `POST` | `/api/v1/agent/ping` | Bearer only (Sanctum **agent** token) | [`AgentPingPostBody`](../pkg/api/ping.go) (`site_runtime_reports` receipts; optional **`runtime_dependency_reports`** bounded dependency observations) | Bounded Git / nginx runtime convergence + TLS/runtime observations + optional runtime dependency evidence |
 
 `{id}` is URL-encoded `node_id`.
+
+**Ping auth** uses **`Authorization: Bearer <token>`** from **`POST /api/v1/agent/bootstrap`** (no `X-Releasepanel-Node-Id` header). Persist the token path via **`agent_ping_token_file`** in [config](../internal/config/config.go). When set, **`runtime_deploy_path_roots`** must list allowed absolute prefixes for site **`deploy_path`** values.
+
+See [GITHUB_SITE_PULL.md](GITHUB_SITE_PULL.md) for clone/fetch/reset semantics, [NGINX_RUNTIME_CONVERGENCE.md](NGINX_RUNTIME_CONVERGENCE.md) for nginx materialization + reload receipts, [TLS_RUNTIME_CONVERGENCE.md](TLS_RUNTIME_CONVERGENCE.md) for TLS receipts, and [RUNTIME_DEPENDENCY_OBSERVATION.md](RUNTIME_DEPENDENCY_OBSERVATION.md) for bounded dependency probes on ping POST.
 
 ## Migrating stored `central_base_url`
 
@@ -58,3 +64,5 @@ Older installs may have persisted **`https://host/api`** inside `enrollment.json
 - [Operational doctrine](OPERATIONS.md)
 - [Enrollment flow](ENROLLMENT.md)
 - [Architecture overview](ARCHITECTURE.md)
+- [Nginx runtime convergence](NGINX_RUNTIME_CONVERGENCE.md)
+- [TLS runtime convergence](TLS_RUNTIME_CONVERGENCE.md)
